@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>http.local — cliente HTTP sin login</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0d0d0d; --bg2: #161616; --bg3: #1e1e1e;
+    --border: #2a2a2a; --border2: #333;
+    --text: #e8e8e8; --text2: #888; --text3: #555;
+    --accent: #e8e8e8;
+    --green: #1d9e75; --green-bg: #0a2e22;
+    --blue: #378add; --blue-bg: #0b1f36;
+    --amber: #ef9f27; --amber-bg: #2e1f06;
+    --red: #e24b4a; --red-bg: #2e0e0e;
+    --purple: #7f77dd; --purple-bg: #1a1830;
+  }
+  body { font-family: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', monospace; font-size: 13px; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* topbar */
+  .topbar { display: flex; align-items: center; gap: 10px; padding: 8px 14px; background: var(--bg2); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .logo { font-size: 15px; font-weight: 600; color: var(--text); letter-spacing: -0.5px; white-space: nowrap; }
+  .logo span { color: var(--text3); }
+  select, .url-input { font-family: inherit; font-size: 13px; background: var(--bg3); color: var(--text); border: 1px solid var(--border); border-radius: 6px; outline: none; }
+  select { padding: 5px 10px; cursor: pointer; }
+  select:focus, .url-input:focus { border-color: var(--border2); }
+  .url-input { flex: 1; padding: 6px 12px; }
+  .btn { font-family: inherit; font-size: 12px; padding: 6px 16px; border-radius: 6px; cursor: pointer; border: 1px solid var(--border2); background: none; color: var(--text2); }
+  .btn:hover { background: var(--bg3); color: var(--text); }
+  .btn.primary { background: var(--text); color: var(--bg); border-color: var(--text); font-weight: 600; }
+  .btn.primary:hover { opacity: 0.85; }
+  .btn.primary:active { opacity: 0.7; }
+
+  /* layout */
+  .main { display: flex; flex: 1; overflow: hidden; }
+  .sidebar { width: 220px; min-width: 220px; background: var(--bg2); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+  .sidebar-header { padding: 10px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+  .label { font-size: 10px; font-weight: 600; color: var(--text3); letter-spacing: 1px; text-transform: uppercase; }
+  .icon-btn { font-size: 18px; color: var(--text3); cursor: pointer; background: none; border: none; line-height: 1; padding: 2px; }
+  .icon-btn:hover { color: var(--text); }
+  .collections { flex: 1; overflow-y: auto; padding: 4px; }
+  .col-item { padding: 7px 10px; cursor: pointer; display: flex; align-items: center; gap: 7px; border-radius: 5px; margin-bottom: 1px; }
+  .col-item:hover { background: var(--bg3); }
+  .col-item.active { background: var(--bg3); }
+  .method-badge { font-size: 10px; font-weight: 700; padding: 2px 5px; border-radius: 3px; min-width: 40px; text-align: center; }
+  .GET    { background: var(--green-bg);  color: var(--green); }
+  .POST   { background: var(--blue-bg);   color: var(--blue); }
+  .PUT    { background: var(--amber-bg);  color: var(--amber); }
+  .DELETE { background: var(--red-bg);    color: var(--red); }
+  .PATCH  { background: var(--purple-bg); color: var(--purple); }
+  .HEAD   { background: var(--bg3);       color: var(--text2); }
+  .col-name { font-size: 12px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
+  .col-del { font-size: 14px; color: var(--text3); background: none; border: none; cursor: pointer; padding: 0 3px; display: none; }
+  .col-item:hover .col-del { display: block; }
+  .col-del:hover { color: var(--red); }
+
+  /* workspace */
+  .workspace { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--bg2); flex-shrink: 0; }
+  .tab { padding: 9px 16px; font-size: 12px; cursor: pointer; color: var(--text3); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .tab:hover { color: var(--text2); }
+  .tab.active { color: var(--text); border-bottom-color: var(--text); }
+  .panel { flex: 1; overflow-y: auto; padding: 14px; }
+  .panel.hidden { display: none; }
+  .section-label { font-size: 10px; font-weight: 600; color: var(--text3); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 10px; }
+  .field-row { display: flex; gap: 6px; margin-bottom: 6px; align-items: center; }
+  .field-row input { font-family: inherit; font-size: 12px; flex: 1; padding: 6px 9px; border: 1px solid var(--border); border-radius: 5px; background: var(--bg3); color: var(--text); outline: none; }
+  .field-row input:focus { border-color: var(--border2); }
+  .del-btn { color: var(--text3); cursor: pointer; border: none; background: none; font-size: 16px; padding: 2px 5px; }
+  .del-btn:hover { color: var(--red); }
+  .add-field-btn { font-family: inherit; font-size: 12px; color: var(--text3); cursor: pointer; border: 1px solid var(--border); border-radius: 5px; padding: 5px 12px; background: none; margin-top: 6px; }
+  .add-field-btn:hover { color: var(--text2); background: var(--bg3); }
+  textarea { width: 100%; font-family: inherit; font-size: 12px; padding: 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg3); color: var(--text); resize: vertical; min-height: 140px; outline: none; line-height: 1.6; }
+  textarea:focus { border-color: var(--border2); }
+
+  /* response */
+  .response-pane { flex-shrink: 0; height: 42%; display: flex; flex-direction: column; border-top: 1px solid var(--border); }
+  .response-header { padding: 8px 14px; display: flex; align-items: center; gap: 10px; background: var(--bg2); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .status-badge { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 4px; }
+  .s2xx { background: var(--green-bg); color: var(--green); }
+  .s3xx { background: var(--amber-bg); color: var(--amber); }
+  .s4xx, .s5xx, .serr { background: var(--red-bg); color: var(--red); }
+  .time-label { font-size: 11px; color: var(--text3); margin-left: auto; }
+  .copy-btn { font-family: inherit; font-size: 11px; color: var(--text3); cursor: pointer; border: 1px solid var(--border); border-radius: 4px; padding: 3px 9px; background: none; }
+  .copy-btn:hover { color: var(--text2); }
+  .response-body { flex: 1; overflow-y: auto; padding: 12px 14px; }
+  pre { font-family: inherit; font-size: 12px; white-space: pre-wrap; word-break: break-all; color: var(--text2); line-height: 1.7; }
+  .empty-state { color: var(--text3); font-size: 12px; padding: 20px; text-align: center; line-height: 2; }
+
+  /* spinner */
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--border2); border-top-color: var(--text2); border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 6px; }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">http<span>.local</span></div>
+  <select id="method">
+    <option>GET</option><option>POST</option><option>PUT</option>
+    <option>PATCH</option><option>DELETE</option><option>HEAD</option>
+  </select>
+  <input class="url-input" id="url" placeholder="https://api.ejemplo.com/v1/recurso" />
+  <button class="btn" onclick="saveRequest()">guardar</button>
+  <button class="btn primary" id="send-btn" onclick="sendRequest()">enviar →</button>
+</div>
+
+<div class="main">
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <span class="label">colección</span>
+      <button class="icon-btn" onclick="clearForm()" title="nueva request">+</button>
+    </div>
+    <div class="collections" id="collections">
+      <div class="empty-state">sin requests guardadas</div>
+    </div>
+  </div>
+
+  <div class="workspace">
+    <div class="tabs">
+      <div class="tab active" onclick="showTab('headers')">headers</div>
+      <div class="tab" onclick="showTab('params')">params</div>
+      <div class="tab" onclick="showTab('body')">body</div>
+    </div>
+
+    <div class="panel" id="tab-headers">
+      <div class="section-label">headers de request</div>
+      <div id="headers-list"></div>
+      <button class="add-field-btn" onclick="addField('headers')">+ agregar header</button>
+    </div>
+
+    <div class="panel hidden" id="tab-params">
+      <div class="section-label">query params</div>
+      <div id="params-list"></div>
+      <button class="add-field-btn" onclick="addField('params')">+ agregar param</button>
+    </div>
+
+    <div class="panel hidden" id="tab-body">
+      <div class="section-label">body — json / texto plano</div>
+      <textarea id="body-input" placeholder='{"usuario": "ejemplo", "activo": true}'></textarea>
+    </div>
+
+    <div class="response-pane">
+      <div class="response-header">
+        <span class="label">respuesta</span>
+        <span class="status-badge" id="status-badge" style="display:none"></span>
+        <span id="time-label" class="time-label"></span>
+        <button class="copy-btn" id="copy-btn" style="display:none" onclick="copyResponse()">copiar</button>
+      </div>
+      <div class="response-body">
+        <div class="empty-state" id="empty-state">
+          envia una request →<br>
+          todo se guarda solo en tu navegador
+        </div>
+        <pre id="response-output" style="display:none"></pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let saved = [];
+try { saved = JSON.parse(localStorage.getItem('httpclient_v1') || '[]'); } catch {}
+
+function showTab(name) {
+  ['headers','params','body'].forEach(t => {
+    document.getElementById('tab-'+t).classList.toggle('hidden', t !== name);
+  });
+  document.querySelectorAll('.tab').forEach((el, i) => {
+    el.classList.toggle('active', ['headers','params','body'][i] === name);
+  });
+}
+
+function addField(type, key='', val='') {
+  const list = document.getElementById(type+'-list');
+  const row = document.createElement('div');
+  row.className = 'field-row';
+  row.innerHTML = `
+    <input placeholder="nombre" value="${escHtml(key)}">
+    <input placeholder="valor" value="${escHtml(val)}">
+    <button class="del-btn" onclick="this.parentElement.remove()">×</button>
+  `;
+  list.appendChild(row);
+}
+
+function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+
+function getFields(type) {
+  const obj = {};
+  document.querySelectorAll('#'+type+'-list .field-row').forEach(r => {
+    const [k, v] = r.querySelectorAll('input');
+    if (k.value.trim()) obj[k.value.trim()] = v.value;
+  });
+  return obj;
+}
+
+async function sendRequest() {
+  const method = document.getElementById('method').value;
+  let url = document.getElementById('url').value.trim();
+  if (!url) { document.getElementById('url').focus(); return; }
+  if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+
+  const params = getFields('params');
+  if (Object.keys(params).length) {
+    url += (url.includes('?') ? '&' : '?') + new URLSearchParams(params);
+  }
+
+  const headers = getFields('headers');
+  const bodyText = document.getElementById('body-input').value.trim();
+  const opts = { method, headers: new Headers(headers) };
+
+  if (bodyText && !['GET','HEAD'].includes(method)) {
+    opts.body = bodyText;
+    if (!opts.headers.has('Content-Type')) opts.headers.set('Content-Type', 'application/json');
+  }
+
+  const btn = document.getElementById('send-btn');
+  btn.innerHTML = '<span class="spinner"></span>enviando';
+  btn.disabled = true;
+
+  const t0 = performance.now();
+  try {
+    const res = await fetch(url, opts);
+    const ms = Math.round(performance.now() - t0);
+    const text = await res.text();
+
+    let pretty = text;
+    try { pretty = JSON.stringify(JSON.parse(text), null, 2); } catch {}
+
+    const cls = res.status < 300 ? 's2xx' : res.status < 400 ? 's3xx' : res.status < 500 ? 's4xx' : 's5xx';
+    showResponse(pretty, `${res.status} ${res.statusText}`, cls, ms + 'ms');
+  } catch (e) {
+    showResponse('Error: ' + e.message, 'Error de red', 'serr', '');
+  }
+
+  btn.innerHTML = 'enviar →';
+  btn.disabled = false;
+}
+
+function showResponse(body, statusText, cls, time) {
+  document.getElementById('empty-state').style.display = 'none';
+  const badge = document.getElementById('status-badge');
+  badge.style.display = '';
+  badge.textContent = statusText;
+  badge.className = 'status-badge ' + cls;
+  document.getElementById('time-label').textContent = time;
+  document.getElementById('copy-btn').style.display = '';
+  const out = document.getElementById('response-output');
+  out.style.display = '';
+  out.textContent = body;
+}
+
+function copyResponse() {
+  const text = document.getElementById('response-output').textContent;
+  navigator.clipboard.writeText(text).catch(() => {});
+  const btn = document.getElementById('copy-btn');
+  btn.textContent = '✓ copiado';
+  setTimeout(() => btn.textContent = 'copiar', 1500);
+}
+
+function saveRequest() {
+  const name = prompt('Nombre para esta request:');
+  if (!name) return;
+  const req = {
+    name,
+    method: document.getElementById('method').value,
+    url: document.getElementById('url').value,
+    headers: getFields('headers'),
+    params: getFields('params'),
+    body: document.getElementById('body-input').value
+  };
+  saved = saved.filter(s => s.name !== name);
+  saved.unshift(req);
+  persist();
+  renderCollections();
+}
+
+function loadRequest(idx) {
+  const req = saved[idx];
+  document.getElementById('method').value = req.method;
+  document.getElementById('url').value = req.url;
+  document.getElementById('body-input').value = req.body || '';
+  document.getElementById('headers-list').innerHTML = '';
+  document.getElementById('params-list').innerHTML = '';
+  Object.entries(req.headers || {}).forEach(([k,v]) => addField('headers', k, v));
+  Object.entries(req.params || {}).forEach(([k,v]) => addField('params', k, v));
+}
+
+function deleteRequest(idx, e) {
+  e.stopPropagation();
+  saved.splice(idx, 1);
+  persist();
+  renderCollections();
+}
+
+function clearForm() {
+  document.getElementById('url').value = '';
+  document.getElementById('method').value = 'GET';
+  document.getElementById('body-input').value = '';
+  document.getElementById('headers-list').innerHTML = '';
+  document.getElementById('params-list').innerHTML = '';
+  document.getElementById('url').focus();
+}
+
+function persist() {
+  try { localStorage.setItem('httpclient_v1', JSON.stringify(saved)); } catch {}
+}
+
+function renderCollections() {
+  const el = document.getElementById('collections');
+  if (!saved.length) {
+    el.innerHTML = '<div class="empty-state">sin requests guardadas</div>';
+    return;
+  }
+  el.innerHTML = saved.map((r, i) => `
+    <div class="col-item" onclick="loadRequest(${i})">
+      <span class="method-badge ${r.method}">${r.method}</span>
+      <span class="col-name" title="${escHtml(r.name)}">${escHtml(r.name)}</span>
+      <button class="col-del" onclick="deleteRequest(${i}, event)">×</button>
+    </div>
+  `).join('');
+}
+
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') sendRequest();
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveRequest(); }
+});
+
+addField('headers', 'Accept', 'application/json');
+renderCollections();
+</script>
+</body>
+</html>

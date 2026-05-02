@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>requestapi</title>
+  <link rel="stylesheet" href="styles/app.css">
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">request<span>api</span></div>
+  <div style="width:1px;height:18px;background:var(--border);flex-shrink:0"></div>
+  <button class="btn" id="tools-toggle-btn" onclick="toggleToolsMode()">herramientas</button>
+  <select id="method">
+    <option>GET</option><option>POST</option><option>PUT</option>
+    <option>PATCH</option><option>DELETE</option><option>HEAD</option>
+  </select>
+  <input class="url-input" id="url" placeholder="https://{{base_url}}/v1/recurso" />
+  <span class="env-dot" id="env-dot" title="sin entorno"></span>
+  <select id="env-select" onchange="selectEnv(this.value)"><option value="">sin env</option></select>
+  <button class="btn" onclick="openEnvModal()">env</button>
+  <button class="btn" onclick="saveRequest()">guardar</button>
+  <button class="btn primary" id="send-btn" onclick="sendRequest()">enviar →</button>
+</div>
+
+<div class="main">
+
+  <!-- sidebar -->
+  <div class="sidebar">
+    <div class="sb-tabs">
+      <div class="sb-tab active" id="sbt-coll" onclick="showSbTab('coll')">colecciones</div>
+      <div class="sb-tab"        id="sbt-hist" onclick="showSbTab('hist')">historial</div>
+    </div>
+    <div class="sb-panel" id="sb-coll">
+      <div class="sb-top-action">
+        <button class="sb-new-btn" onclick="startNewColl()">+ nueva colección</button>
+      </div>
+      <div id="coll-tree" style="flex:1;overflow-y:auto;padding:0 4px 4px"></div>
+    </div>
+    <div class="sb-panel hidden" id="sb-hist">
+      <div class="hist-header">
+        <span class="section-label">últimas requests</span>
+        <button class="hist-clear-btn" onclick="confirmClearHistory()">limpiar</button>
+      </div>
+      <div id="hist-list" style="flex:1;overflow-y:auto;padding:0 4px 4px"></div>
+    </div>
+  </div>
+
+  <!-- request workspace -->
+  <div class="workspace">
+    <div class="tabs">
+      <div class="tab active" onclick="showTab('headers')">headers</div>
+      <div class="tab"        onclick="showTab('params')">params</div>
+      <div class="tab"        onclick="showTab('body')">body</div>
+      <div class="tab"        onclick="showTab('auth')">auth</div>
+    </div>
+
+    <div class="panel" id="tab-headers">
+      <div class="section-label">headers de request</div>
+      <div id="headers-list"></div>
+      <button class="add-field-btn" onclick="addField('headers')">+ agregar header</button>
+    </div>
+    <div class="panel hidden" id="tab-params">
+      <div class="section-label">query params</div>
+      <div id="params-list"></div>
+      <button class="add-field-btn" onclick="addField('params')">+ agregar param</button>
+    </div>
+    <div class="panel hidden" id="tab-body">
+      <div class="section-label">body — json / texto plano</div>
+      <textarea id="body-input" placeholder='{"usuario": "ejemplo", "activo": true}'></textarea>
+    </div>
+    <div class="panel hidden" id="tab-auth">
+      <div class="section-label">autenticación</div>
+      <div class="auth-type-row">
+        <button class="atype-btn active" data-type="none"   onclick="setAuthType('none')">sin auth</button>
+        <button class="atype-btn"        data-type="bearer" onclick="setAuthType('bearer')">Bearer Token</button>
+        <button class="atype-btn"        data-type="basic"  onclick="setAuthType('basic')">Basic Auth</button>
+        <button class="atype-btn"        data-type="apikey" onclick="setAuthType('apikey')">API Key</button>
+      </div>
+      <div id="auth-fields"></div>
+      <div class="auth-preview" id="auth-preview" style="display:none">
+        <div class="section-label">header generado</div>
+        <div class="auth-preview-val" id="auth-preview-val"></div>
+      </div>
+    </div>
+
+    <div class="resize-handle" id="resize-handle"></div>
+
+    <div class="response-pane" id="response-pane">
+      <div class="response-header">
+        <span class="section-label" style="flex-shrink:0">respuesta</span>
+        <span class="status-badge" id="status-badge" style="display:none"></span>
+        <span class="resp-meta" id="resp-ctype"></span>
+        <span class="resp-meta" id="resp-time"></span>
+        <span class="resp-meta" id="resp-size"></span>
+        <span class="spacer"></span>
+        <div class="resp-tabs" id="resp-tabs" style="display:none">
+          <button class="resp-tab active" id="rtab-body"    onclick="showRespTab('body')">body</button>
+          <button class="resp-tab"        id="rtab-headers" onclick="showRespTab('headers')">headers</button>
+        </div>
+        <button class="resp-tab" id="raw-btn"  style="display:none" onclick="toggleRaw()">raw</button>
+        <button class="copy-btn" id="copy-btn" style="display:none" onclick="copyResponse()">copiar</button>
+      </div>
+      <div class="response-body">
+        <div class="empty-state" id="empty-state">enviá una request →<br>todo se guarda en tu máquina</div>
+        <pre id="response-output" style="display:none"></pre>
+        <div id="resp-headers-list" style="display:none"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- tools workspace -->
+  <div class="tools-ws" id="tools-ws">
+    <div class="tool-tabs">
+      <div class="tool-tab active" id="ttab-json"     onclick="showToolTab('json')">JSON</div>
+      <div class="tool-tab"       id="ttab-markdown"  onclick="showToolTab('markdown')">Markdown</div>
+      <div class="tool-tab"       id="ttab-html"      onclick="showToolTab('html')">HTML</div>
+    </div>
+
+    <div class="tool-panel" id="tp-json">
+      <div class="tool-side" id="tj-left" style="flex:1">
+        <div class="tool-side-header">
+          <span class="tool-side-label">entrada</span>
+          <button class="btn" onclick="fmtJSON(2)">formatear</button>
+          <button class="btn" onclick="fmtJSON(0)">minificar</button>
+          <button class="btn" onclick="document.getElementById('tj-input').value='';fmtJSON(2)">limpiar</button>
+        </div>
+        <textarea class="tool-textarea" id="tj-input" placeholder='{"clave": "valor", "numero": 42, "activo": true}' oninput="autoFmtJSON()"></textarea>
+      </div>
+      <div class="vsplit-handle" id="tj-split"></div>
+      <div class="tool-side" id="tj-right" style="flex:1">
+        <div class="tool-side-header">
+          <span class="tool-side-label">resultado</span>
+          <button class="btn" id="tj-copy-btn" onclick="copyToolJSON()">copiar</button>
+        </div>
+        <div class="tool-output" id="tj-out"><span style="color:var(--text3)">el resultado aparecerá aquí…</span></div>
+      </div>
+    </div>
+
+    <div class="tool-panel hidden" id="tp-markdown">
+      <div class="tool-side" id="tm-left" style="flex:1">
+        <div class="tool-side-header">
+          <span class="tool-side-label">markdown</span>
+          <button class="btn" onclick="document.getElementById('tm-input').value='';renderMD()">limpiar</button>
+        </div>
+        <textarea class="tool-textarea" id="tm-input"
+          placeholder="# Título&#10;&#10;Escribí **markdown** aquí y verás el preview en tiempo real.&#10;&#10;- Listas&#10;- **Negrita**, *cursiva*&#10;- `código inline`"
+          oninput="renderMD()"></textarea>
+      </div>
+      <div class="vsplit-handle" id="tm-split"></div>
+      <div class="tool-side" id="tm-right" style="flex:1">
+        <div class="tool-side-header">
+          <span class="tool-side-label">preview</span>
+          <button class="btn" id="tm-copy-btn" onclick="copyMDHtml()">copiar HTML</button>
+        </div>
+        <div class="tool-output md-preview" id="tm-out"><span class="md-empty">el preview aparecerá aquí…</span></div>
+      </div>
+    </div>
+
+    <div class="tool-panel hidden" id="tp-html">
+      <div class="tool-side" id="th-left" style="flex:1">
+        <div class="tool-side-header">
+          <span class="tool-side-label">HTML</span>
+          <button class="btn" onclick="document.getElementById('th-input').value='';previewHTML()">limpiar</button>
+          <button class="btn primary" onclick="openHTMLInWindow()">abrir en ventana ↗</button>
+        </div>
+        <textarea class="tool-textarea" id="th-input"
+          placeholder="&lt;!DOCTYPE html&gt;&#10;&lt;html lang=&quot;es&quot;&gt;&#10;&lt;head&gt;&#10;  &lt;meta charset=&quot;UTF-8&quot;&gt;&#10;  &lt;title&gt;preview&lt;/title&gt;&#10;&lt;/head&gt;&#10;&lt;body&gt;&#10;  &lt;h1&gt;Hola mundo&lt;/h1&gt;&#10;&lt;/body&gt;&#10;&lt;/html&gt;"
+          oninput="previewHTML()"></textarea>
+      </div>
+      <div class="vsplit-handle" id="th-split"></div>
+      <div class="tool-side" id="th-right" style="flex:1">
+        <div class="tool-side-header">
+          <span class="tool-side-label">preview</span>
+        </div>
+        <iframe class="tool-preview-frame" id="th-iframe"
+          sandbox="allow-scripts allow-same-origin allow-forms"
+          style="background:#fff"></iframe>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- modal: guardar -->
+<div class="modal-overlay" id="save-modal" style="display:none" onclick="if(event.target===this)closeSaveModal()">
+  <div class="modal">
+    <div class="modal-title">guardar request</div>
+    <div class="mfield">
+      <div class="flabel">nombre</div>
+      <input class="modal-input" id="save-name-input" placeholder="ej. get usuarios" autocomplete="off" />
+    </div>
+    <div class="mfield">
+      <div class="flabel">colección</div>
+      <select class="modal-input" id="save-coll-select" onchange="onSaveCollChange()"></select>
+    </div>
+    <div class="mfield" id="save-new-coll-row" style="display:none">
+      <div class="flabel">nombre de la nueva colección</div>
+      <input class="modal-input" id="save-new-coll-input" placeholder="ej. Users API" autocomplete="off" />
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeSaveModal()">cancelar</button>
+      <button class="btn primary" onclick="confirmSave()">guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- modal: entornos -->
+<div class="modal-overlay" id="env-modal" style="display:none" onclick="if(event.target===this)closeEnvModal()">
+  <div class="modal">
+    <div class="modal-title">variables de entorno</div>
+    <div class="env-modal-body">
+      <div class="env-chips" id="env-chips"></div>
+      <div class="env-create-row">
+        <input class="modal-input" id="new-env-input" placeholder="nombre del nuevo entorno…" autocomplete="off" />
+        <button class="btn" onclick="createEnv()">+ crear</button>
+        <button class="btn" id="del-env-btn" onclick="deleteCurrentEnv()" style="color:var(--red);display:none">borrar</button>
+      </div>
+      <div class="env-divider"></div>
+      <div class="section-label" id="env-edit-label" style="margin-bottom:10px"></div>
+      <div id="env-vars-list"></div>
+      <button class="add-field-btn" id="env-add-var-btn" onclick="addEnvVarRow()" style="display:none">+ agregar variable</button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn primary" onclick="closeEnvModal()">listo</button>
+    </div>
+  </div>
+</div>
+
+<!-- modal: confirmación -->
+<div class="modal-overlay" id="confirm-modal" style="display:none" onclick="if(event.target===this)closeConfirmModal()">
+  <div class="modal">
+    <div class="modal-title">confirmar</div>
+    <p class="confirm-msg" id="confirm-msg"></p>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeConfirmModal()">cancelar</button>
+      <button class="btn" style="color:var(--red);border-color:var(--red-bg)" onclick="execConfirm()">eliminar</button>
+    </div>
+  </div>
+</div>
+
+<!-- datalists -->
+<datalist id="header-names">
+  <option value="Accept"><option value="Accept-Encoding"><option value="Accept-Language">
+  <option value="Authorization"><option value="Cache-Control"><option value="Content-Length">
+  <option value="Content-Type"><option value="Cookie"><option value="Host">
+  <option value="If-Modified-Since"><option value="If-None-Match"><option value="Origin">
+  <option value="Pragma"><option value="Referer"><option value="User-Agent">
+  <option value="X-API-Key"><option value="X-Auth-Token"><option value="X-CSRF-Token">
+  <option value="X-Forwarded-For"><option value="X-Request-ID"><option value="X-Requested-With">
+  <option value="X-Correlation-ID"><option value="X-Tenant-ID"><option value="X-Client-ID">
+</datalist>
+<datalist id="content-type-values">
+  <option value="application/json"><option value="application/x-www-form-urlencoded">
+  <option value="multipart/form-data"><option value="text/plain"><option value="text/html">
+  <option value="application/xml"><option value="application/octet-stream">
+</datalist>
+
+<script src="js/utils.js"></script>
+<script src="js/state.js"></script>
+<script src="js/fields.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/env.js"></script>
+<script src="js/response.js"></script>
+<script src="js/collections.js"></script>
+<script src="js/history.js"></script>
+<script src="js/request.js"></script>
+<script src="js/tools.js"></script>
+<script src="js/resize.js"></script>
+<script src="js/init.js"></script>
+
+</body>
+</html>
