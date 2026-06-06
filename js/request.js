@@ -45,6 +45,8 @@ async function sendRequest() {
     const ctype = (respHeaders['content-type'] || '').split(';')[0].trim();
 
     showResponse(pretty, `${status} ${statusText}`, cls, ms, ctype, body.length, respHeaders);
+    if (typeof runTests === 'function') showTestResults(runTests(status, body, ms));
+    if (typeof updateCurrentTabLabel === 'function') updateCurrentTabLabel();
     activeHistIdx = -1;
     pushHistory({ method, url, status, statusText, cls, ctype, ms, size: body.length, body, prettyBody: pretty, isJSON, respHeaders });
   } catch(e) {

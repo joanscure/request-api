@@ -1,5 +1,5 @@
 function showTab(name) {
-  const names = ['headers','params','body','auth'];
+  const names = ['headers','params','body','auth','tests'];
   names.forEach(t => document.getElementById('tab-'+t).classList.toggle('hidden', t !== name));
   document.querySelectorAll('.tab').forEach((el,i) => el.classList.toggle('active', names[i] === name));
 }
@@ -24,7 +24,8 @@ function addField(type, key='', val='') {
     ki.addEventListener('change', sync);
     if (key.toLowerCase()==='content-type') vi.setAttribute('list','content-type-values');
   }
-  const db = document.createElement('button'); db.className='del-btn'; db.textContent='×'; db.onclick=()=>row.remove();
+  const db = document.createElement('button'); db.className='del-btn'; db.textContent='×';
+  db.onclick = () => { row.remove(); if (typeof scheduleAutoSave === 'function') scheduleAutoSave(); };
   row.append(ki, vi, db); list.appendChild(row);
 }
 

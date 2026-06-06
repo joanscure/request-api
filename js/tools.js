@@ -8,14 +8,16 @@ function toggleToolsMode() {
 }
 
 function showToolTab(name) {
-  ['json','markdown','html'].forEach(t => {
+  ['json','markdown','html','diff'].forEach(t => {
     document.getElementById('tp-'+t).classList.toggle('hidden', t !== name);
     document.getElementById('ttab-'+t).classList.toggle('active', t === name);
   });
 }
 
 // JSON tool
-let _tjTimer = null;
+let _tjTimer     = null;
+let _tjNodes     = [];
+let _tjFormatted = '';
 
 function autoFmtJSON() {
   clearTimeout(_tjTimer);
@@ -25,26 +27,68 @@ function autoFmtJSON() {
 function fmtJSON(indent) {
   const input = document.getElementById('tj-input').value.trim();
   const out   = document.getElementById('tj-out');
+  _tjFormatted = ''; _tjNodes = [];
   if (!input) {
     out.innerHTML = '<span style="color:var(--text3)">el resultado aparecerá aquí…</span>';
     return;
   }
   try {
-    const formatted = JSON.stringify(JSON.parse(input), null, indent);
-    out.innerHTML = '<pre>' + highlightJSON(formatted) + '</pre>';
+    const parsed = JSON.parse(input);
+    _tjFormatted = JSON.stringify(parsed, null, indent);
+    if (indent > 0) {
+      out.innerHTML = '<pre>' + buildJSONHTML(parsed, 0, _tjNodes) + '</pre>';
+    } else {
+      out.innerHTML = '<pre>' + highlightJSON(_tjFormatted) + '</pre>';
+    }
   } catch(e) {
     out.innerHTML = '<div class="tool-err">JSON inválido: ' + escT(e.message) + '</div>';
   }
 }
 
 function copyToolJSON() {
-  const pre = document.getElementById('tj-out').querySelector('pre');
-  if (!pre) return;
-  navigator.clipboard.writeText(pre.textContent).catch(()=>{});
+  if (!_tjFormatted) return;
+  navigator.clipboard.writeText(_tjFormatted).catch(()=>{});
   const btn = document.getElementById('tj-copy-btn');
   btn.textContent = '✓ copiado';
   setTimeout(() => btn.textContent = 'copiar', 1500);
 }
+
+// --- context menu: right-click copy of any object/array node ---
+function closeTjCtxMenu() {
+  const menu = document.getElementById('tj-ctx-menu');
+  menu.style.display = 'none';
+  menu._copyVal = null;
+}
+
+function tjCopyCtxNode() {
+  const menu = document.getElementById('tj-ctx-menu');
+  if (!menu._copyVal) return;
+  navigator.clipboard.writeText(JSON.stringify(menu._copyVal, null, 2)).catch(()=>{});
+  closeTjCtxMenu();
+}
+
+document.getElementById('tj-out').addEventListener('contextmenu', e => {
+  const jc = e.target.closest('.jc[data-jni]');
+  if (!jc) return;
+  e.preventDefault();
+  const val = _tjNodes[parseInt(jc.dataset.jni, 10)];
+  if (val == null) return;
+  const isArr = Array.isArray(val);
+  const count = isArr ? val.length : Object.keys(val).length;
+  document.getElementById('tj-ctx-label').textContent = isArr
+    ? `Copiar array [${count}]`
+    : `Copiar objeto {${count}}`;
+  const menu = document.getElementById('tj-ctx-menu');
+  menu._copyVal = val;
+  menu.style.display = 'block';
+  menu.style.left = Math.min(e.clientX, window.innerWidth  - 210) + 'px';
+  menu.style.top  = Math.min(e.clientY, window.innerHeight - 44)  + 'px';
+});
+
+document.addEventListener('mousedown', e => {
+  const menu = document.getElementById('tj-ctx-menu');
+  if (menu.style.display !== 'none' && !menu.contains(e.target)) closeTjCtxMenu();
+});
 
 // Markdown tool
 let _tmTimer = null;

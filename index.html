@@ -19,7 +19,10 @@
   <span class="env-dot" id="env-dot" title="sin entorno"></span>
   <select id="env-select" onchange="selectEnv(this.value)"><option value="">sin env</option></select>
   <button class="btn" onclick="openEnvModal()">env</button>
+  <button class="btn" onclick="openCurlModal()">cURL</button>
+  <button class="btn" onclick="newRequest()">nuevo</button>
   <button class="btn" onclick="saveRequest()">guardar</button>
+  <button class="btn" onclick="openRepeatModal()">repetir</button>
   <button class="btn primary" id="send-btn" onclick="sendRequest()">enviar →</button>
 </div>
 
@@ -34,6 +37,7 @@
     <div class="sb-panel" id="sb-coll">
       <div class="sb-top-action">
         <button class="sb-new-btn" onclick="startNewColl()">+ nueva colección</button>
+        <button class="sb-new-btn" onclick="importColl()" style="margin-top:4px">↑ importar colección</button>
       </div>
       <div id="coll-tree" style="flex:1;overflow-y:auto;padding:0 4px 4px"></div>
     </div>
@@ -48,11 +52,13 @@
 
   <!-- request workspace -->
   <div class="workspace">
+    <div class="tabs-bar" id="tabs-bar"></div>
     <div class="tabs">
       <div class="tab active" onclick="showTab('headers')">headers</div>
       <div class="tab"        onclick="showTab('params')">params</div>
       <div class="tab"        onclick="showTab('body')">body</div>
       <div class="tab"        onclick="showTab('auth')">auth</div>
+      <div class="tab"        onclick="showTab('tests')">tests</div>
     </div>
 
     <div class="panel" id="tab-headers">
@@ -84,6 +90,12 @@
       </div>
     </div>
 
+    <div class="panel hidden" id="tab-tests">
+      <div class="section-label">assertions</div>
+      <div id="tests-list"></div>
+      <button class="add-field-btn" onclick="addTest()">+ agregar assertion</button>
+    </div>
+
     <div class="resize-handle" id="resize-handle"></div>
 
     <div class="response-pane" id="response-pane">
@@ -97,14 +109,24 @@
         <div class="resp-tabs" id="resp-tabs" style="display:none">
           <button class="resp-tab active" id="rtab-body"    onclick="showRespTab('body')">body</button>
           <button class="resp-tab"        id="rtab-headers" onclick="showRespTab('headers')">headers</button>
+          <button class="resp-tab"        id="rtab-tests"   onclick="showRespTab('tests')">tests</button>
         </div>
-        <button class="resp-tab" id="raw-btn"  style="display:none" onclick="toggleRaw()">raw</button>
-        <button class="copy-btn" id="copy-btn" style="display:none" onclick="copyResponse()">copiar</button>
+        <button class="resp-tab" id="raw-btn"      style="display:none" onclick="toggleRaw()">raw</button>
+        <button class="resp-tab" id="srch-open-btn" style="display:none" onclick="openRespSearch()" title="Ctrl+F">buscar</button>
+        <button class="copy-btn" id="copy-btn"      style="display:none" onclick="copyResponse()">copiar</button>
+      </div>
+      <div class="resp-search" id="resp-search" style="display:none">
+        <input class="resp-search-input" id="resp-search-input" placeholder="buscar en respuesta…" autocomplete="off" oninput="execRespSearch()" />
+        <span class="srch-count" id="srch-count"></span>
+        <button class="resp-tab" onclick="navRespSearch(-1)" title="anterior (Shift+Enter)">↑</button>
+        <button class="resp-tab" onclick="navRespSearch(1)"  title="siguiente (Enter)">↓</button>
+        <button class="resp-tab" onclick="closeRespSearch()">✕</button>
       </div>
       <div class="response-body">
         <div class="empty-state" id="empty-state">enviá una request →<br>todo se guarda en tu máquina</div>
         <pre id="response-output" style="display:none"></pre>
         <div id="resp-headers-list" style="display:none"></div>
+        <div id="resp-tests-list"   style="display:none"></div>
       </div>
     </div>
   </div>
@@ -115,6 +137,7 @@
       <div class="tool-tab active" id="ttab-json"     onclick="showToolTab('json')">JSON</div>
       <div class="tool-tab"       id="ttab-markdown"  onclick="showToolTab('markdown')">Markdown</div>
       <div class="tool-tab"       id="ttab-html"      onclick="showToolTab('html')">HTML</div>
+      <div class="tool-tab"       id="ttab-diff"      onclick="showToolTab('diff')">Diff</div>
     </div>
 
     <div class="tool-panel" id="tp-json">
@@ -178,6 +201,31 @@
           style="background:#fff"></iframe>
       </div>
     </div>
+    <div class="tool-panel hidden" id="tp-diff">
+      <div class="tool-side" id="td-left" style="flex:1">
+        <div class="tool-side-header">
+          <span class="tool-side-label">versión A</span>
+          <button class="btn" onclick="useResponseForDiff('left')" title="pegar respuesta actual">← respuesta</button>
+          <button class="btn" onclick="clearDiff()">limpiar</button>
+        </div>
+        <textarea class="tool-textarea" id="td-left-input" placeholder='{"version": "A"}' oninput="diffInputChanged()"></textarea>
+      </div>
+      <div class="vsplit-handle" id="td-split"></div>
+      <div class="tool-side" id="td-right" style="flex:1">
+        <div class="tool-side-header">
+          <span class="tool-side-label">versión B</span>
+          <button class="btn" onclick="useResponseForDiff('right')" title="pegar respuesta actual">← respuesta</button>
+        </div>
+        <textarea class="tool-textarea" id="td-right-input" placeholder='{"version": "B"}' oninput="diffInputChanged()"></textarea>
+      </div>
+      <div class="vsplit-handle"></div>
+      <div class="tool-side" style="flex:1.2">
+        <div class="tool-side-header">
+          <span class="tool-side-label">diferencias</span>
+        </div>
+        <div class="tool-output" id="td-out"><span style="color:var(--text3)">pegá dos JSONs o textos para comparar…</span></div>
+      </div>
+    </div>
   </div>
 
 </div>
@@ -185,7 +233,7 @@
 <!-- modal: guardar -->
 <div class="modal-overlay" id="save-modal" style="display:none" onclick="if(event.target===this)closeSaveModal()">
   <div class="modal">
-    <div class="modal-title">guardar request</div>
+    <div class="modal-title" id="save-modal-title">guardar request</div>
     <div class="mfield">
       <div class="flabel">nombre</div>
       <input class="modal-input" id="save-name-input" placeholder="ej. get usuarios" autocomplete="off" />
@@ -239,6 +287,56 @@
   </div>
 </div>
 
+<!-- modal: cURL -->
+<div class="modal-overlay" id="curl-modal" style="display:none" onclick="if(event.target===this)closeCurlModal()">
+  <div class="modal curl-modal">
+    <div class="modal-title">cURL</div>
+    <div class="curl-section">
+      <div class="flabel" style="margin-bottom:6px">copiar como cURL</div>
+      <textarea class="modal-input curl-textarea" id="curl-output" readonly onclick="this.select()"></textarea>
+      <div class="modal-actions" style="margin-top:8px;justify-content:flex-start">
+        <button class="btn" id="curl-copy-btn" onclick="copyCurl()">copiar</button>
+        <button class="btn" onclick="refreshCurlOutput()">actualizar</button>
+      </div>
+    </div>
+    <div class="curl-divider"></div>
+    <div class="curl-section">
+      <div class="flabel" style="margin-bottom:6px">importar desde cURL</div>
+      <textarea class="modal-input curl-textarea" id="curl-import-input" placeholder="pegá un comando curl aquí…"></textarea>
+      <div class="curl-import-err" id="curl-import-err" style="display:none">comando cURL inválido o no reconocido</div>
+      <div class="modal-actions" style="margin-top:8px;justify-content:flex-start">
+        <button class="btn primary" onclick="importCurl()">importar</button>
+        <button class="btn" onclick="closeCurlModal()">cancelar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- modal: repetir -->
+<div class="modal-overlay" id="repeat-modal" style="display:none" onclick="if(event.target===this)closeRepeatModal()">
+  <div class="modal repeat-modal">
+    <div class="modal-title">repetir request</div>
+    <div class="repeat-config">
+      <div class="mfield" style="margin-bottom:0">
+        <div class="flabel">repeticiones</div>
+        <input class="modal-input" id="repeat-count-input" type="number" min="1" max="1000" value="10" style="width:100px" />
+      </div>
+      <div class="mfield" style="margin-bottom:0">
+        <div class="flabel">delay entre requests (ms)</div>
+        <input class="modal-input" id="repeat-delay-input" type="number" min="0" max="60000" value="0" style="width:100px" />
+      </div>
+      <div style="display:flex;gap:6px;align-items:flex-end">
+        <button class="btn primary" id="repeat-run-btn" onclick="runRepeat()">ejecutar</button>
+        <button class="btn" id="repeat-stop-btn" onclick="stopRepeat()" style="display:none;color:var(--red)">detener</button>
+        <button class="btn" onclick="closeRepeatModal()">cerrar</button>
+      </div>
+    </div>
+    <div class="repeat-progress-wrap"><div class="repeat-progress" id="repeat-progress"></div></div>
+    <div class="repeat-summary" id="repeat-summary"></div>
+    <div class="repeat-results" id="repeat-results"></div>
+  </div>
+</div>
+
 <!-- datalists -->
 <datalist id="header-names">
   <option value="Accept"><option value="Accept-Encoding"><option value="Accept-Language">
@@ -256,16 +354,26 @@
   <option value="application/xml"><option value="application/octet-stream">
 </datalist>
 
+<!-- JSON tool context menu -->
+<div id="tj-ctx-menu" class="tj-ctx-menu" style="display:none">
+  <div class="tj-ctx-item" onclick="tjCopyCtxNode()"><span id="tj-ctx-label"></span></div>
+</div>
+
 <script src="js/utils.js"></script>
 <script src="js/state.js"></script>
 <script src="js/fields.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/env.js"></script>
 <script src="js/response.js"></script>
+<script src="js/tabs.js"></script>
 <script src="js/collections.js"></script>
 <script src="js/history.js"></script>
 <script src="js/request.js"></script>
 <script src="js/tools.js"></script>
+<script src="js/curl.js"></script>
+<script src="js/tests.js"></script>
+<script src="js/diff.js"></script>
+<script src="js/repeat.js"></script>
 <script src="js/resize.js"></script>
 <script src="js/init.js"></script>
 

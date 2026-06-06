@@ -1,4 +1,4 @@
-// collections = [{id, name, open, requests:[{id,name,method,url,headers,params,body,auth}]}]
+// collections = [{id, name, open, requests:[{id,name,method,url,headers,params,body,auth,tests}]}]
 let collections   = [];
 let activeCollId  = null;
 let activeReqId   = null;
@@ -13,6 +13,13 @@ let rawBody     = '';
 let prettyBody  = '';
 let isJSON      = false;
 let showRaw     = false;
+// response display state (for tab persistence)
+let respStatusText = '';
+let respCls        = '';
+let respMs         = 0;
+let respCtype      = '';
+let respSize       = 0;
+let respHeaders    = {};
 let _authType   = 'none';
 let _confirmCb  = null;
 
@@ -36,6 +43,9 @@ try { envState    = JSON.parse(localStorage.getItem('httpclient_envs_v1') || '{"
       }
     } catch {}
   } else {
+    // Primera ejecución: colección General con un request vacío por defecto
+    const firstReq = { id: genId(), name: 'nuevo request', method: 'GET', url: '', headers: { Accept: 'application/json' }, params: {}, body: '', auth: { type: 'none' } };
+    collections.push({ id: genId(), name: 'General', open: true, requests: [firstReq] });
     persist();
   }
 })();
@@ -43,6 +53,25 @@ try { envState    = JSON.parse(localStorage.getItem('httpclient_envs_v1') || '{"
 function persist() {
   try { localStorage.setItem('httpclient_v2', JSON.stringify(collections)); } catch {}
 }
+
+// Tabs
+function createTabState() {
+  return {
+    id: genId(), label: 'nuevo',
+    method: 'GET', url: '',
+    headers: { Accept: 'application/json' },
+    params: {}, body: '',
+    auth: { type: 'none' },
+    tests: [],
+    collId: null, reqId: null,
+    hasResp: false,
+    rawBody: '', prettyBody: '', isJSON: false, showRaw: false,
+    respStatusText: '', respCls: '', respMs: 0,
+    respCtype: '', respSize: 0, respHeaders: {}
+  };
+}
+let tabs         = [createTabState()];
+let activeTabIdx = 0;
 
 function showConfirm(msg, cb) {
   document.getElementById('confirm-msg').textContent = msg;
